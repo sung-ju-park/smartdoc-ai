@@ -48,7 +48,7 @@ retrieve → grade_documents ──(충분)───────────→ 
 
 이 구조는 "Corrective RAG"라고 불리는 패턴으로, 정해진 파이프라인을 한 번 실행하는 것과 달리 결과에 따라 스스로 경로를 바꾸는 것이 일반 RAG와 AI Agent의 핵심적인 차이입니다. Streamlit UI에서 "일반 RAG"와 "Agent 모드"를 토글로 전환하며 두 방식의 답변을 바로 비교해볼 수 있습니다.
 
-![Agent 모드 실행 화면](screenshots/agent_demo.png)
+![Agent 모드 실행 화면](screenshots/20260801_132643.png)
 
 *Agent 모드 — 문서에 있는 정보는 정확히 답변하고, 없는 정보는 지어내지 않고 솔직하게 답변합니다.*
 
