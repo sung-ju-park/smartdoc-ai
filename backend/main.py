@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from . import config
 from .ingest import ingest_pdf, list_ingested_files
 from .rag_chain import ask as rag_ask
+from .agent_graph import ask_agent
 
 app = FastAPI(title="SmartDoc AI")
 
@@ -51,6 +52,19 @@ async def ask_question(req: AskRequest):
         raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
 
     return rag_ask(req.question, req.filename)
+
+
+@app.post("/ask-agent")
+async def ask_question_agent(req: AskRequest):
+    """LangGraph 기반 자가 교정형 RAG Agent 엔드포인트.
+
+    /ask와 달리, 검색 결과가 부족하면 질문을 스스로 재작성해
+    다시 검색하는 판단 루프를 거친 뒤 답변한다.
+    """
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
+
+    return ask_agent(req.question, req.filename)
 
 
 @app.get("/")

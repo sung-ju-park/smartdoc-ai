@@ -41,6 +41,14 @@ with st.sidebar:
 
     selected_doc = st.selectbox("검색 범위 (선택 안 하면 전체 문서 대상)", ["전체"] + docs)
 
+    st.divider()
+    st.subheader("응답 모드")
+    mode = st.radio(
+        "질문에 답하는 방식",
+        ["일반 RAG", "Agent 모드 (자가 교정)"],
+        help="Agent 모드는 검색 결과가 부족하면 질문을 스스로 재작성해 다시 검색합니다.",
+    )
+
 # --- 메인: 채팅 ---
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
@@ -60,8 +68,9 @@ if question:
     with st.chat_message("assistant"):
         with st.spinner("답변을 생성하고 있습니다..."):
             try:
+                endpoint = "/ask-agent" if mode.startswith("Agent") else "/ask"
                 res = requests.post(
-                    f"{API_URL}/ask",
+                    f"{API_URL}{endpoint}",
                     json={"question": question, "filename": filename},
                 )
                 if res.status_code == 200:
@@ -69,6 +78,8 @@ if question:
                     st.write(data["answer"])
                     if data.get("sources"):
                         st.caption(f"출처: {', '.join(data['sources'])}")
+                    if "retries" in data:
+                        st.caption(f"검색 재시도 횟수: {data['retries']}회")
                     st.session_state.chat_history.append(
                         {
                             "role": "assistant",

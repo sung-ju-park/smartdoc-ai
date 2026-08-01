@@ -20,7 +20,18 @@ def get_vectorstore():
 
 
 def ingest_pdf(file_path: str, filename: str) -> int:
-    """PDF 한 개를 읽어서 벡터DB에 저장하고, 저장된 청크 개수를 반환한다."""
+    """PDF 한 개를 읽어서 벡터DB에 저장하고, 저장된 청크 개수를 반환한다.
+
+    같은 filename으로 이미 저장된 청크가 있으면 먼저 삭제한 뒤 새로 넣어서
+    같은 문서를 다시 업로드했을 때 중복이 쌓이지 않도록 한다.
+    """
+    vectorstore = get_vectorstore()
+
+    # 같은 파일명으로 이미 저장된 청크가 있으면 먼저 지운다 (재업로드 시 중복 방지)
+    existing = vectorstore.get(where={"source": filename})
+    if existing and existing.get("ids"):
+        vectorstore.delete(ids=existing["ids"])
+
     loader = PyPDFLoader(file_path)
     pages = loader.load()
 
@@ -34,7 +45,6 @@ def ingest_pdf(file_path: str, filename: str) -> int:
     for chunk in chunks:
         chunk.metadata["source"] = filename
 
-    vectorstore = get_vectorstore()
     vectorstore.add_documents(chunks)
 
     return len(chunks)
