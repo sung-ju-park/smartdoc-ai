@@ -7,6 +7,7 @@ PDF 문서를 업로드하면, 그 문서 내용을 근거로 질문에 답변�
 
 - **v1**: PDF 업로드 → 벡터 검색 → LLM 답변까지 이어지는 기본 RAG 파이프라인 구현
 - **v2**: LangGraph 기반 자가 교정 Agent(`/ask-agent`) 추가 — 검색 결과가 부족하면 스스로 질문을 재작성해 다시 검색. 재업로드 시 벡터DB에 청크가 중복 저장되던 버그도 함께 발견·수정
+- **v3**: Claude Desktop에서 바로 호출 가능한 MCP 서버 추가 — `search_documents`, `ask_document_agent`, `upload_document` 3개 tool 제공
 
 ## 왜 이렇게 만들었나
 
@@ -52,6 +53,49 @@ retrieve → grade_documents ──(충분)───────────→ 
 
 *Agent 모드 — 문서에 있는 정보는 정확히 답변하고, 없는 정보는 지어내지 않고 솔직하게 답변합니다.*
 
+## 🔌 MCP 서버 지원 (Claude Desktop 연동)
+
+기존 웹 기반(FastAPI + Streamlit) 서비스를, Claude Desktop에서 바로 호출할 수 있는 **MCP(Model Context Protocol) 서버**로 확장했습니다. HTTP 계층 없이 Claude Desktop이 파이썬 함수를 직접 호출하는 구조로, 위의 RAG 로직(`rag_chain.py`, `agent_graph.py`)을 그대로 재사용합니다.
+
+### 제공 도구 (Tools)
+
+| 도구 | 설명 |
+|---|---|
+| `search_documents` | 기본 RAG — 문서 검색 후 답변 생성 |
+| `ask_document_agent` | LangGraph 기반 자기교정형 RAG — 검색 결과가 부족하면 질의를 스스로 재구성해 재검색 |
+| `upload_document` | 로컬 PDF 경로를 받아 청크 분할 후 벡터DB에 인덱싱 |
+
+### 동작 예시
+
+**1. 문서 업로드**
+![업로드 데모](screenshots/20260819_135125.png)
+
+**2. 문서 검색**
+![검색 데모](screenshots/20260819_135144.png)
+
+### 실행 방법
+
+```bash
+cd mcp-server
+pip install mcp
+python server.py
+```
+
+`claude_desktop_config.json`(설정 → 개발자 → 로컬 MCP 서버 → 구성 편집)에 아래 내용 등록 후 Claude Desktop 재시작:
+
+```json
+{
+  "mcpServers": {
+    "smartdoc-ai": {
+      "command": "<python 경로>",
+      "args": ["<프로젝트 경로>/mcp-server/server.py"]
+    }
+  }
+}
+```
+
+> ⚠️ `backend/config.py`의 `UPLOAD_DIR`, `CHROMA_DIR`은 실행 환경에 맞게 절대경로로 수정해서 사용하세요.
+
 ## 기술 스택
 
 | 영역 | 사용 기술 |
@@ -68,6 +112,8 @@ retrieve → grade_documents ──(충분)───────────→ 
 ```
 smartdoc-ai/
 ├── backend/
+├── mcp-server/
+│   └── server.py           # RAG 로직을 MCP tool로 노출, Claude Desktop과 연동
 │   ├── config.py          # 모델/경로 설정값
 │   ├── ingest.py          # PDF 파싱 → 청크 → 임베딩 → 벡터DB 저장 (재업로드 시 중복 방지)
 │   ├── rag_chain.py       # 단순 RAG 체인 (/ask)
