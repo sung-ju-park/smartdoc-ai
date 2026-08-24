@@ -194,8 +194,8 @@ python -m backend.debug_retrieve "질문 내용" 파일명.pdf
 
 **구조**: GitHub Webhook → Make(Custom Webhook 트리거) → Google Sheets(Add a Row)
 
-![Make 시나리오 구조](screenshots/make-scenario-diagram.png)
+![Make 시나리오 구조](screenshots/20260824_141408.png)
 
 커밋 메시지, 저장소명, 날짜, 커밋 링크가 push할 때마다 자동으로 시트에 쌓입니다.
 
-![자동화 결과](screenshots/make-automation-result.png)
+![자동화 결과](screenshots/20260824_141416.png)
