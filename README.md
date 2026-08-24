@@ -8,6 +8,7 @@ PDF 문서를 업로드하면, 그 문서 내용을 근거로 질문에 답변�
 - **v1**: PDF 업로드 → 벡터 검색 → LLM 답변까지 이어지는 기본 RAG 파이프라인 구현
 - **v2**: LangGraph 기반 자가 교정 Agent(`/ask-agent`) 추가 — 검색 결과가 부족하면 스스로 질문을 재작성해 다시 검색. 재업로드 시 벡터DB에 청크가 중복 저장되던 버그도 함께 발견·수정
 - **v3**: Claude Desktop에서 바로 호출 가능한 MCP 서버 추가 — `search_documents`, `ask_document_agent`, `upload_document` 3개 tool 제공
+- **v4**: GitHub push 이벤트를 감지해 Google Sheets에 커밋 로그를 자동 기록하는 Make 기반 업무 자동화 파이프라인 추가
 
 ## 왜 이렇게 만들었나
 
@@ -184,6 +185,7 @@ python -m backend.debug_retrieve "질문 내용" 파일명.pdf
 - 웹 검색, 계산기 등 외부 도구를 추가로 연결한 멀티 툴 Agent로 확장
 - 대화 히스토리를 반영한 멀티턴 질의응답
 - Docker로 배포 환경 구성
+
 
 
 ## 🔗 Make를 활용한 업무 자동화 예시
