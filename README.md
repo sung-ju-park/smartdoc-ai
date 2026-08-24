@@ -184,3 +184,16 @@ python -m backend.debug_retrieve "질문 내용" 파일명.pdf
 - 웹 검색, 계산기 등 외부 도구를 추가로 연결한 멀티 툴 Agent로 확장
 - 대화 히스토리를 반영한 멀티턴 질의응답
 - Docker로 배포 환경 구성
+
+
+## 🔗 Make를 활용한 업무 자동화 예시
+
+이 프로젝트의 개발 활동을 자동으로 기록하기 위해, GitHub push 이벤트를 감지해 Google Sheets에 커밋 로그를 자동 기록하는 파이프라인을 만들었습니다.
+
+**구조**: GitHub Webhook → Make(Custom Webhook 트리거) → Google Sheets(Add a Row)
+
+![Make 시나리오 구조](screenshots/make-scenario-diagram.png)
+
+커밋 메시지, 저장소명, 날짜, 커밋 링크가 push할 때마다 자동으로 시트에 쌓입니다.
+
+![자동화 결과](screenshots/make-automation-result.png)
