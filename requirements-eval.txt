@@ -1,0 +1,4 @@
+# LLM 비교 실험(eval/)용 추가 패키지 — 사용할 provider만 설치하면 된다
+langchain-openai
+langchain-anthropic
+langchain-google-genai

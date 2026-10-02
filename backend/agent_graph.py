@@ -9,6 +9,7 @@ rag_chain.py의 단순 RAG(검색 → 생성, 1회성)를 확장해서,
                               └─(부족, 재시도 가능)→ rewrite_query → retrieve (반복)
                               └─(부족, 재시도 소진)──→ generate → END
 """
+from functools import partial
 from typing import Optional, TypedDict
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -32,7 +33,7 @@ class AgentState(TypedDict):
     sources: list
 
 
-def _llm():
+def _default_llm():
     return ChatOllama(model=config.LLM_MODEL, temperature=0)
 
 
@@ -61,9 +62,9 @@ GRADE_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-def grade_documents_node(state: AgentState) -> dict:
+def grade_documents_node(state: AgentState, llm) -> dict:
     context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
-    result = _llm().invoke(GRADE_PROMPT.format_messages(question=state["question"], context=context))
+    result = llm.invoke(GRADE_PROMPT.format_messages(question=state["question"], context=context))
     grade = "sufficient" if "sufficient" in result.content.lower() else "insufficient"
     return {"grade": grade}
 
@@ -82,8 +83,8 @@ REWRITE_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-def rewrite_query_node(state: AgentState) -> dict:
-    result = _llm().invoke(REWRITE_PROMPT.format_messages(question=state["question"]))
+def rewrite_query_node(state: AgentState, llm) -> dict:
+    result = llm.invoke(REWRITE_PROMPT.format_messages(question=state["question"]))
     return {
         "search_query": result.content.strip(),
         "retries": state["retries"] + 1,
@@ -104,9 +105,9 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-def generate_node(state: AgentState) -> dict:
+def generate_node(state: AgentState, llm) -> dict:
     context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
-    result = _llm().invoke(ANSWER_PROMPT.format_messages(question=state["question"], context=context))
+    result = llm.invoke(ANSWER_PROMPT.format_messages(question=state["question"], context=context))
     sources = sorted({d.metadata.get("source", "unknown") for d in state["documents"]})
     return {"answer": result.content, "sources": sources}
 
@@ -121,13 +122,17 @@ def route_after_grading(state: AgentState) -> str:
     return "rewrite_query"
 
 
-def build_agent_graph():
+def build_agent_graph(llm=None):
+    # llm을 넘기지 않으면 기존처럼 로컬 Ollama 모델을 사용한다.
+    if llm is None:
+        llm = _default_llm()
+
     graph = StateGraph(AgentState)
 
     graph.add_node("retrieve", retrieve_node)
-    graph.add_node("grade_documents", grade_documents_node)
-    graph.add_node("rewrite_query", rewrite_query_node)
-    graph.add_node("generate", generate_node)
+    graph.add_node("grade_documents", partial(grade_documents_node, llm=llm))
+    graph.add_node("rewrite_query", partial(rewrite_query_node, llm=llm))
+    graph.add_node("generate", partial(generate_node, llm=llm))
 
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "grade_documents")
@@ -142,8 +147,8 @@ def build_agent_graph():
     return graph.compile()
 
 
-def ask_agent(question: str, filename: Optional[str] = None) -> dict:
-    app = build_agent_graph()
+def ask_agent(question: str, filename: Optional[str] = None, llm=None) -> dict:
+    app = build_agent_graph(llm=llm)
     initial_state: AgentState = {
         "question": question,
         "search_query": question,
@@ -159,4 +164,6 @@ def ask_agent(question: str, filename: Optional[str] = None) -> dict:
         "answer": result["answer"],
         "sources": result["sources"],
         "retries": result["retries"],
+        # 평가 시 '검색 실패'와 '생성 실패'를 구분하기 위해 마지막으로 검색된 문단 원문도 함께 반환
+        "contexts": [d.page_content for d in result["documents"]],
     }

@@ -24,7 +24,7 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 
-def build_chain(filename: str | None = None):
+def build_chain(filename: str | None = None, llm=None):
     vectorstore = get_vectorstore()
 
     search_kwargs = {"k": config.RETRIEVE_TOP_K}
@@ -33,14 +33,17 @@ def build_chain(filename: str | None = None):
 
     retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
 
-    llm = ChatOllama(model=config.LLM_MODEL, temperature=0)
+    # llm을 넘기지 않으면 기존처럼 로컬 Ollama 모델을 사용한다.
+    # 모델 비교 실험(eval/)에서는 다른 LLM을 주입해서 같은 파이프라인으로 비교한다.
+    if llm is None:
+        llm = ChatOllama(model=config.LLM_MODEL, temperature=0)
 
     document_chain = create_stuff_documents_chain(llm, prompt)
     return create_retrieval_chain(retriever, document_chain)
 
 
-def ask(question: str, filename: str | None = None) -> dict:
-    chain = build_chain(filename)
+def ask(question: str, filename: str | None = None, llm=None) -> dict:
+    chain = build_chain(filename, llm=llm)
     result = chain.invoke({"input": question})
 
     sources = sorted(
@@ -50,4 +53,6 @@ def ask(question: str, filename: str | None = None) -> dict:
     return {
         "answer": result["answer"],
         "sources": sources,
+        # 평가 시 '검색 실패'와 '생성 실패'를 구분하기 위해 검색된 문단 원문도 함께 반환
+        "contexts": [doc.page_content for doc in result.get("context", [])],
     }
