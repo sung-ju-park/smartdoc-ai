@@ -40,7 +40,12 @@ def load_dataset(path: str) -> list[dict]:
 
 
 def run_one(item: dict, mode: str, llm, filename: str) -> dict:
-    """질문 하나를 실행하고 답변, 시간, 토큰 사용량을 돌려준다."""
+    """질문 하나를 실행하고 답변, 시간, 토큰 사용량을 돌려준다.
+
+    API 무료 등급 한도를 지키려고 기다린 시간(wait_sec)은 응답 시간에서 뺀다.
+    """
+    limiter = getattr(llm, "rate_limiter", None)
+    waited_before = getattr(limiter, "waited_sec", 0.0)
     with get_usage_metadata_callback() as cb:
         start = time.perf_counter()
         if mode == "rag":
@@ -49,7 +54,9 @@ def run_one(item: dict, mode: str, llm, filename: str) -> dict:
         else:
             result = ask_agent(item["question"], filename, llm=llm)
             retries = result.get("retries", 0)
-        latency = time.perf_counter() - start
+        elapsed = time.perf_counter() - start
+    wait = getattr(limiter, "waited_sec", 0.0) - waited_before
+    latency = elapsed - wait
 
     input_tokens = sum(u.get("input_tokens", 0) for u in cb.usage_metadata.values())
     output_tokens = sum(u.get("output_tokens", 0) for u in cb.usage_metadata.values())
@@ -59,6 +66,7 @@ def run_one(item: dict, mode: str, llm, filename: str) -> dict:
         "contexts": result.get("contexts", []),
         "retries": retries,
         "latency_sec": latency,
+        "wait_sec": wait,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
     }
@@ -112,7 +120,7 @@ def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None
     fields = [
         "model", "mode", "id", "answerable", "question", "answer", "correct", "partial",
         "refused", "retrieval_hit", "failure_type", "foreign_script", "retries",
-        "latency_sec", "input_tokens", "output_tokens", "error",
+        "latency_sec", "wait_sec", "input_tokens", "output_tokens", "error",
     ]
     with open(os.path.join(out_dir, "results.csv"), "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
@@ -121,13 +129,13 @@ def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None
 
     lines = [
         "# LLM 비교 실험 결과\n",
-        "| 모델 | 방식 | 정답률 | 부분점수 | 거절 정확도 | 검색 실패 | 생성 실패 | 잘못된 거절 | 환각 | 외국 문자 혼입 | 평균 응답(초) | p90 응답(초) | 평균 토큰(입력/출력) | 100문항당 비용(USD) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| 모델 | 방식 | 오류 | 정답률 | 부분점수 | 거절 정확도 | 검색 실패 | 생성 실패 | 잘못된 거절 | 환각 | 외국 문자 혼입 | 평균 응답(초) | p90 응답(초) | 평균 토큰(입력/출력) | 100문항당 비용(USD) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s in summaries:
         cost = "-" if s["cost_per_100"] is None else f"{s['cost_per_100']:.4f}"
         lines.append(
-            f"| {s['model']} | {s['mode']} | {s['accuracy']:.0%} | {s['partial']:.2f} | "
+            f"| {s['model']} | {s['mode']} | {s['errors']} | {s['accuracy']:.0%} | {s['partial']:.2f} | "
             f"{s['refusal_acc']:.0%} | {s['retrieval_miss']} | {s['generation_miss']} | "
             f"{s['false_refusal']} | {s['hallucination']} | {s['foreign_script']} | "
             f"{s['latency_mean']:.1f} | {s['latency_p90']:.1f} | "
@@ -204,7 +212,7 @@ def main():
                     row.update({
                         "answer": "", "correct": False, "partial": 0.0, "refused": False,
                         "retrieval_hit": None, "failure_type": "", "foreign_script": False,
-                        "retries": 0, "latency_sec": 0.0, "input_tokens": 0, "output_tokens": 0,
+                        "retries": 0, "latency_sec": 0.0, "wait_sec": 0.0, "input_tokens": 0, "output_tokens": 0,
                         "error": f"{type(e).__name__}: {e}",
                     })
                 mode_rows.append(row)

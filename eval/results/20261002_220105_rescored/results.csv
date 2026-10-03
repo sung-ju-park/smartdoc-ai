@@ -1,0 +1,57 @@
+﻿model,mode,id,answerable,question,answer,correct,partial,refused,retrieval_hit,failure_type,foreign_script,retries,latency_sec,wait_sec,input_tokens,output_tokens,error
+gemini:gemini-3.5-flash-lite,rag,A01,True,SmartDoc AI에서 문서 임베딩을 저장하는 벡터 DB는 무엇인가요?,Chroma입니다.,True,1.0,False,True,,False,0,2.4151092000538483,,1216,4,
+gemini:gemini-3.5-flash-lite,rag,A02,True,SmartDoc AI가 사용하는 로컬 LLM 모델은 무엇인가요?,"문맥에 따르면, SmartDoc AI가 사용하는 로컬 LLM 모델은 **Qwen2.5 (Ollama)**입니다.",True,1.0,False,True,,False,0,1.5858008000068367,,1213,28,
+gemini:gemini-3.5-flash-lite,rag,A03,True,SmartDoc AI의 MCP 서버가 제공하는 도구 세 가지의 이름을 알려주세요.,"문맥에 따르면 SmartDoc AI의 MCP 서버가 제공하는 3개의 도구 이름은 다음과 같습니다:
+
+1. `search_documents`
+2. `ask_document_agent`
+3. `upload_document`",True,1.0,False,True,,False,0,1.7869039999786764,,1217,49,
+gemini:gemini-3.5-flash-lite,rag,A04,True,SmartDoc AI에서 검색 결과의 관련성이 부족할 때 질문을 다시 쓰는 단계의 이름은 무엇인가요?,`rewrite_query`입니다.,True,1.0,False,True,,False,0,1.5367948999628425,,1222,7,
+gemini:gemini-3.5-flash-lite,rag,A05,True,SmartDoc AI를 Claude Desktop과 연동할 때 생긴 문제는 무엇이고 어떻게 해결했나요?,"SmartDoc AI를 Claude Desktop과 연동할 때 생긴 문제는 설치형 데스크톱 앱의 폴더 접근 제약이었으며, 이는 데이터 저장 경로를 실행 환경에 맞게 재설정하여 해결했습니다.",True,1.0,False,True,,False,0,2.371460599999409,,1218,45,
+gemini:gemini-3.5-flash-lite,rag,A06,True,Industrial Defect Inspection 프로젝트에서 사용한 데이터셋은 무엇인가요?,Industrial Defect Inspection 프로젝트에서 사용한 데이터셋은 MVTec AD 데이터셋(hazelnut 카테고리)입니다.,True,1.0,False,True,,False,0,1.5519070000154898,,1335,28,
+gemini:gemini-3.5-flash-lite,rag,A07,True,Industrial Defect Inspection 프로젝트는 MVTec AD의 어떤 카테고리를 사용했나요?,"제공된 문서에 따르면, Industrial Defect Inspection 프로젝트는 MVTec AD 데이터 셋의 **hazelnut** 카테고리를 사용했습니다.",True,1.0,False,True,,False,0,2.167600199987646,,1340,33,
+gemini:gemini-3.5-flash-lite,rag,A08,True,PatchCore 모델의 Image AUROC 값은 얼마인가요?,"제공된 문서에 따르면, PatchCore 모델의 Image AUROC 값은 1.000입니다.",True,1.0,False,True,,False,0,2.854349799978081,,1214,24,
+gemini:gemini-3.5-flash-lite,rag,A09,True,YOLOv8 모델의 mAP50 값은 얼마인가요?,문맥에 따르면 YOLOv8 모델의 mAP50 값은 0.869입니다.,True,1.0,False,True,,False,0,2.1796673999051563,,1217,23,
+gemini:gemini-3.5-flash-lite,rag,A10,True,YOLOv8은 crack 결함에서 재현율이 얼마까지 떨어졌나요?,문맥에 따르면 YOLOv8은 crack처럼 얇고 곡선인 결함에서 재현율이 0.143까지 떨어졌습니다.,True,1.0,False,True,,False,0,2.028949700004887,,1031,34,
+gemini:gemini-3.5-flash-lite,rag,A11,True,YOLOv8은 어떤 환경에서 학습했나요?,"제공된 문맥에 따르면, YOLOv8은 Google Colab의 T4 GPU 환경에서 학습 및 평가되었습니다.",True,1.0,False,True,,False,0,2.278138499998022,,1024,26,
+gemini:gemini-3.5-flash-lite,rag,A12,True,PatchCore가 픽셀 단위 위치 파악에서 약점을 보인 결함 유형은 무엇인가요?,가늘고 긴 cut 결함입니다.,True,1.0,False,True,,False,0,2.0485769999795593,,1224,9,
+gemini:gemini-3.5-flash-lite,rag,A13,True,DoctorChat 프로젝트에서 사용한 언어 모델은 무엇인가요?,DoctorChat 프로젝트에서 사용한 언어 모델은 GPT-NeoX 기반의 Polyglot-ko 모델입니다.,True,1.0,False,True,,False,0,1.920288100023754,,938,24,
+gemini:gemini-3.5-flash-lite,rag,A14,True,DoctorChat 팀 프로젝트에서 박성주가 담당한 파트는 무엇인가요?,DoctorChat 팀 프로젝트에서 박성주가 담당한 파트는 **FastAPI 서빙 파트**입니다.,True,1.0,False,True,,False,0,1.8867595000192523,,941,23,
+gemini:gemini-3.5-flash-lite,rag,A15,True,박성주가 엔셀에서 근무한 기간은 언제부터 언제까지인가요?,"제공된 문서에 따르면, 박성주가 엔셀(주)에서 근무한 기간(실무)은 2025년 3월부터 2025년 8월까지입니다.",True,1.0,False,True,,False,0,2.220037399965804,,1216,47,
+gemini:gemini-3.5-flash-lite,rag,A16,True,박성주의 대학교 평점은 얼마인가요?,제공된 문서에 따르면 박성주의 대학교 평점은 3.67/4.5입니다.,True,1.0,False,True,,False,0,1.829416399996262,,1210,25,
+gemini:gemini-3.5-flash-lite,rag,A17,True,박성주가 엔셀에서 맡았던 최종 직위는 무엇인가요?,제공된 문서에 따르면 박성주가 엔셀에서 맡았던 직위는 '프로'입니다.,True,1.0,False,True,,False,0,2.0654530000756495,,1215,23,
+gemini:gemini-3.5-flash-lite,rag,A18,True,박성주가 KDT 과정을 수료한 교육기관은 어디인가요?,"제공된 문서에 따르면, 박성주가 KDT 과정을 수료한 교육기관은 **코리아IT아카데미**입니다.",True,1.0,False,True,,False,0,2.0103672999539413,,1454,31,
+gemini:gemini-3.5-flash-lite,rag,U01,False,박성주가 가장 좋아하는 색깔은 무엇인가요?,모릅니다.,True,1.0,True,,,False,0,1.7198115999926813,,1211,4,
+gemini:gemini-3.5-flash-lite,rag,U02,False,박성주의 토익 점수는 몇 점인가요?,모릅니다.,True,1.0,True,,,False,0,2.0532323000370525,,1210,4,
+gemini:gemini-3.5-flash-lite,rag,U03,False,박성주의 병역 사항은 어떻게 되나요?,제공된 문서에서 박성주의 병역 사항에 대한 내용을 찾을 수 없습니다.,True,1.0,True,,,False,0,1.5943701000651345,,1209,19,
+gemini:gemini-3.5-flash-lite,rag,U04,False,DoctorChat 서비스의 월간 사용자 수는 몇 명인가요?,문맥에서 해당 내용을 찾을 수 없어 알 수 없습니다.,True,1.0,True,,,False,0,1.6316505000577308,,1211,13,
+gemini:gemini-3.5-flash-lite,rag,U05,False,YOLOv8을 학습할 때 사용한 배치 크기는 얼마인가요?,"제공된 문서 내용에 따르면, YOLOv8을 학습할 때 사용한 배치 크기에 대한 정보는 찾을 수 없습니다.",True,1.0,True,,,False,0,1.778088100021705,,1295,28,
+gemini:gemini-3.5-flash-lite,rag,U06,False,SmartDoc AI를 배포한 AWS 리전은 어디인가요?,제공된 문서에서 SmartDoc AI를 배포한 AWS 리전에 대한 내용은 찾을 수 없습니다. 모릅니다.,True,1.0,True,,,False,0,1.8566593000432476,,1213,26,
+gemini:gemini-3.5-flash-lite,rag,U07,False,엔셀 본사의 주소는 어디인가요?,제공된 문서에서 엔셀 본사의 주소는 찾을 수 없습니다.,True,1.0,True,,,False,0,71.66839550004806,,1209,17,
+gemini:gemini-3.5-flash-lite,rag,U08,False,박성주가 취득한 정보처리기사 자격증의 취득일은 언제인가요?,문맥에서 해당 내용을 찾을 수 없어 알 수 없습니다.,True,1.0,True,,,False,0,2.1015408999519423,,1221,13,
+gemini:gemini-3.5-flash-lite,agent,A01,True,SmartDoc AI에서 문서 임베딩을 저장하는 벡터 DB는 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A02,True,SmartDoc AI가 사용하는 로컬 LLM 모델은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A03,True,SmartDoc AI의 MCP 서버가 제공하는 도구 세 가지의 이름을 알려주세요.,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A04,True,SmartDoc AI에서 검색 결과의 관련성이 부족할 때 질문을 다시 쓰는 단계의 이름은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A05,True,SmartDoc AI를 Claude Desktop과 연동할 때 생긴 문제는 무엇이고 어떻게 해결했나요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A06,True,Industrial Defect Inspection 프로젝트에서 사용한 데이터셋은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A07,True,Industrial Defect Inspection 프로젝트는 MVTec AD의 어떤 카테고리를 사용했나요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A08,True,PatchCore 모델의 Image AUROC 값은 얼마인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A09,True,YOLOv8 모델의 mAP50 값은 얼마인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A10,True,YOLOv8은 crack 결함에서 재현율이 얼마까지 떨어졌나요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A11,True,YOLOv8은 어떤 환경에서 학습했나요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A12,True,PatchCore가 픽셀 단위 위치 파악에서 약점을 보인 결함 유형은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A13,True,DoctorChat 프로젝트에서 사용한 언어 모델은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A14,True,DoctorChat 팀 프로젝트에서 박성주가 담당한 파트는 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A15,True,박성주가 엔셀에서 근무한 기간은 언제부터 언제까지인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A16,True,박성주의 대학교 평점은 얼마인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A17,True,박성주가 엔셀에서 맡았던 최종 직위는 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,A18,True,박성주가 KDT 과정을 수료한 교육기관은 어디인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U01,False,박성주가 가장 좋아하는 색깔은 무엇인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U02,False,박성주의 토익 점수는 몇 점인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U03,False,박성주의 병역 사항은 어떻게 되나요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U04,False,DoctorChat 서비스의 월간 사용자 수는 몇 명인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U05,False,YOLOv8을 학습할 때 사용한 배치 크기는 얼마인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U06,False,SmartDoc AI를 배포한 AWS 리전은 어디인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U07,False,엔셀 본사의 주소는 어디인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'
+gemini:gemini-3.5-flash-lite,agent,U08,False,박성주가 취득한 정보처리기사 자격증의 취득일은 언제인가요?,,False,0.0,False,,,False,0,0.0,,0,0,AttributeError: 'list' object has no attribute 'lower'

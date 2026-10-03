@@ -21,6 +21,26 @@ PRICE_PER_1M_TOKENS = {
 }
 
 
+import time
+
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+
+class TimedRateLimiter(InMemoryRateLimiter):
+    """무료 등급 한도를 지키려고 기다린 시간을 따로 기록하는 rate limiter.
+
+    응답 시간을 잴 때 이 대기 시간을 빼야 모델 자체의 응답 속도를 공정하게 비교할 수 있다.
+    """
+
+    waited_sec: float = 0.0
+
+    def acquire(self, *, blocking: bool = True) -> bool:
+        start = time.perf_counter()
+        ok = super().acquire(blocking=blocking)
+        self.waited_sec += time.perf_counter() - start
+        return ok
+
+
 def get_price(spec: str):
     if spec.startswith("ollama:"):
         return (0.0, 0.0)
@@ -43,6 +63,11 @@ def get_llm(spec: str, temperature: float = 0):
         return ChatAnthropic(model=model, temperature=temperature)
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
+        # 무료 등급은 분당 요청 수 제한이 있어서(약 10회 안팎) 요청 간격을 자동으로 벌린다.
+        # 약 7~8초에 1번 = 분당 8회 정도
+        limiter = TimedRateLimiter(requests_per_second=0.13, check_every_n_seconds=0.1, max_bucket_size=1)
+        return ChatGoogleGenerativeAI(
+            model=model, temperature=temperature, rate_limiter=limiter, max_retries=6
+        )
 
     raise ValueError(f"지원하지 않는 provider입니다: {provider}")

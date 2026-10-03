@@ -37,6 +37,25 @@ def _default_llm():
     return ChatOllama(model=config.LLM_MODEL, temperature=0)
 
 
+def _text(message) -> str:
+    """LLM 응답에서 텍스트만 꺼낸다.
+
+    Ollama는 응답 content가 문자열이지만, Gemini 3 계열 등 일부 모델은
+    [{"type": "text", "text": "..."}, ...] 같은 리스트로 돌려준다.
+    어떤 모델을 끼워도 같은 코드로 동작하도록 여기서 문자열로 통일한다.
+    """
+    content = message.content
+    if isinstance(content, str):
+        return content
+    parts = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif isinstance(part, dict) and part.get("type") == "text":
+            parts.append(part.get("text", ""))
+    return "".join(parts)
+
+
 # ---------- 1. 검색 ----------
 def retrieve_node(state: AgentState) -> dict:
     vectorstore = get_vectorstore()
@@ -65,7 +84,9 @@ GRADE_PROMPT = ChatPromptTemplate.from_messages(
 def grade_documents_node(state: AgentState, llm) -> dict:
     context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
     result = llm.invoke(GRADE_PROMPT.format_messages(question=state["question"], context=context))
-    grade = "sufficient" if "sufficient" in result.content.lower() else "insufficient"
+    text = _text(result).lower()
+    # 'insufficient' 안에도 'sufficient'가 들어 있으므로 insufficient를 먼저 확인한다
+    grade = "insufficient" if "insufficient" in text else ("sufficient" if "sufficient" in text else "insufficient")
     return {"grade": grade}
 
 
@@ -86,7 +107,7 @@ REWRITE_PROMPT = ChatPromptTemplate.from_messages(
 def rewrite_query_node(state: AgentState, llm) -> dict:
     result = llm.invoke(REWRITE_PROMPT.format_messages(question=state["question"]))
     return {
-        "search_query": result.content.strip(),
+        "search_query": _text(result).strip(),
         "retries": state["retries"] + 1,
     }
 
@@ -109,7 +130,7 @@ def generate_node(state: AgentState, llm) -> dict:
     context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
     result = llm.invoke(ANSWER_PROMPT.format_messages(question=state["question"], context=context))
     sources = sorted({d.metadata.get("source", "unknown") for d in state["documents"]})
-    return {"answer": result.content, "sources": sources}
+    return {"answer": _text(result), "sources": sources}
 
 
 # ---------- 라우팅 ----------
