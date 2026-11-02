@@ -40,6 +40,13 @@ class TimedRateLimiter(InMemoryRateLimiter):
         self.waited_sec += time.perf_counter() - start
         return ok
 
+    async def aacquire(self, *, blocking: bool = True) -> bool:
+        # 답변을 비동기(ainvoke)로 만들게 바뀌어, 비동기 경로의 대기 시간도 기록한다
+        start = time.perf_counter()
+        ok = await super().aacquire(blocking=blocking)
+        self.waited_sec += time.perf_counter() - start
+        return ok
+
 
 def get_price(spec: str):
     if spec.startswith("ollama:"):

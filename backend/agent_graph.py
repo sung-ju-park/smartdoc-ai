@@ -1,25 +1,28 @@
 """LangGraph 기반 자가 교정형(Self-Correcting) RAG Agent
 
-rag_chain.py의 단순 RAG(검색 → 생성, 1회성)를 확장해서,
-검색된 문서가 질문에 답하기 충분한지 LLM이 스스로 판단하고,
-부족하면 질문을 다시 써서 재검색하는 판단 루프를 추가한 버전이다.
+검색된 문서가 질문에 답하기 충분한지 LLM이 스스로 판단하고, 부족하면 질문을 다시 써서 재검색한다.
+답변을 만든 뒤에는 근거 확인 단계(guard)를 거쳐, 근거가 없는 답변은 내보내지 않는다.
 
 플로우:
-    retrieve → grade_documents ─(충분)──────────→ generate → END
+    retrieve → grade_documents ─(충분)──────────→ generate → guard → END
                               └─(부족, 재시도 가능)→ rewrite_query → retrieve (반복)
-                              └─(부족, 재시도 소진)──→ generate → END
-"""
-from functools import partial
-from typing import Optional, TypedDict
+                              └─(부족, 재시도 소진)──→ generate → guard → END
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_ollama import ChatOllama
+모든 노드는 비동기(async)로 동작해, FastAPI 이벤트 루프를 막지 않는다.
+astream_agent()는 단계가 끝날 때마다 이벤트를 흘려보내 화면에서 진행 상황을 볼 수 있게 한다.
+"""
+import time
+from functools import partial
+from typing import AsyncIterator, Optional, TypedDict
+
 from langgraph.graph import END, START, StateGraph
 
-from . import config
-from .ingest import get_vectorstore
+from . import prompts
+from .guardrails import scrub_documents
+from .rag_chain import _default_llm, finalize, retriever_for, run_sync, text_of
 
 MAX_RETRIES = 2
+PROMPTS = ("grade", "rewrite", "answer_agent")
 
 
 class AgentState(TypedDict):
@@ -27,110 +30,54 @@ class AgentState(TypedDict):
     search_query: str        # 실제 검색에 쓰는 질문 (재작성될 수 있음)
     filename: Optional[str]
     documents: list
-    grade: str                # "sufficient" | "insufficient"
+    removed: list            # 문서에서 걸러낸 지시문
+    grade: str               # "sufficient" | "insufficient"
     retries: int
     answer: str
-    sources: list
+    result: dict             # 근거 확인까지 끝난 최종 응답
+    guard_on: bool
 
 
-def _default_llm():
-    return ChatOllama(model=config.LLM_MODEL, temperature=0)
-
-
-def _text(message) -> str:
-    """LLM 응답에서 텍스트만 꺼낸다.
-
-    Ollama는 응답 content가 문자열이지만, Gemini 3 계열 등 일부 모델은
-    [{"type": "text", "text": "..."}, ...] 같은 리스트로 돌려준다.
-    어떤 모델을 끼워도 같은 코드로 동작하도록 여기서 문자열로 통일한다.
-    """
-    content = message.content
-    if isinstance(content, str):
-        return content
-    parts = []
-    for part in content:
-        if isinstance(part, str):
-            parts.append(part)
-        elif isinstance(part, dict) and part.get("type") == "text":
-            parts.append(part.get("text", ""))
-    return "".join(parts)
-
-
-# ---------- 1. 검색 ----------
-def retrieve_node(state: AgentState) -> dict:
-    vectorstore = get_vectorstore()
-    search_kwargs = {"k": config.RETRIEVE_TOP_K}
-    if state.get("filename"):
-        search_kwargs["filter"] = {"source": state["filename"]}
-    retriever = vectorstore.as_retriever(search_kwargs=search_kwargs)
-    docs = retriever.invoke(state["search_query"])
-    return {"documents": docs}
+# ---------- 1. 검색 (+ 문서 속 지시문 걸러내기) ----------
+async def retrieve_node(state: AgentState) -> dict:
+    docs = await retriever_for(state.get("filename")).ainvoke(state["search_query"])
+    docs, removed = scrub_documents(docs) if state.get("guard_on", True) else (docs, [])
+    seen = state.get("removed", [])
+    return {"documents": docs, "removed": seen + [r for r in removed if r not in seen]}
 
 
 # ---------- 2. 검색 결과 채점 ----------
-GRADE_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "당신은 검색된 문서가 질문에 답하기 충분한 정보를 담고 있는지 평가하는 채점자입니다.\n"
-            "문서에 질문과 관련된 내용이 있으면 'sufficient', 관련 내용이 거의 없으면 'insufficient'라고만 답하세요.\n"
-            "다른 말은 하지 마세요.",
-        ),
-        ("human", "질문: {question}\n\n문서 내용:\n{context}"),
-    ]
-)
-
-
-def grade_documents_node(state: AgentState, llm) -> dict:
-    context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
-    result = llm.invoke(GRADE_PROMPT.format_messages(question=state["question"], context=context))
-    text = _text(result).lower()
+def parse_grade(text: str) -> str:
+    text = text.lower()
     # 'insufficient' 안에도 'sufficient'가 들어 있으므로 insufficient를 먼저 확인한다
-    grade = "insufficient" if "insufficient" in text else ("sufficient" if "sufficient" in text else "insufficient")
-    return {"grade": grade}
+    if "insufficient" in text:
+        return "insufficient"
+    return "sufficient" if "sufficient" in text else "insufficient"
+
+
+async def grade_documents_node(state: AgentState, llm) -> dict:
+    context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
+    msg = await llm.ainvoke(prompts.get("grade").format_messages(question=state["question"], context=context))
+    return {"grade": parse_grade(text_of(msg))}
 
 
 # ---------- 3. 질문 재작성 (검색이 부족했을 때) ----------
-REWRITE_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "검색 결과가 질문에 답하기 부족했습니다. 같은 의도를 유지하면서, "
-            "문서 검색에 더 적합하도록 질문을 구체적인 키워드 중심으로 다시 써주세요. "
-            "재작성한 질문만 답하세요.",
-        ),
-        ("human", "원본 질문: {question}"),
-    ]
-)
+async def rewrite_query_node(state: AgentState, llm) -> dict:
+    msg = await llm.ainvoke(prompts.get("rewrite").format_messages(question=state["question"]))
+    return {"search_query": text_of(msg).strip(), "retries": state["retries"] + 1}
 
 
-def rewrite_query_node(state: AgentState, llm) -> dict:
-    result = llm.invoke(REWRITE_PROMPT.format_messages(question=state["question"]))
-    return {
-        "search_query": _text(result).strip(),
-        "retries": state["retries"] + 1,
-    }
-
-
-# ---------- 4. 최종 답변 생성 ----------
-ANSWER_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "당신은 업로드된 문서를 기반으로 질문에 답하는 어시스턴트입니다.\n"
-            "아래 문맥에 있는 내용만 근거로 답변하세요. 문맥에서 답을 찾을 수 없으면 모른다고 솔직하게 말하세요.\n"
-            "답변은 한국어로 간결하고 명확하게 작성하세요.\n\n문맥:\n{context}",
-        ),
-        ("human", "{question}"),
-    ]
-)
-
-
-def generate_node(state: AgentState, llm) -> dict:
+# ---------- 4. 답변 생성 ----------
+async def generate_node(state: AgentState, llm) -> dict:
     context = "\n\n".join(d.page_content for d in state["documents"]) or "(검색된 문서 없음)"
-    result = llm.invoke(ANSWER_PROMPT.format_messages(question=state["question"], context=context))
-    sources = sorted({d.metadata.get("source", "unknown") for d in state["documents"]})
-    return {"answer": _text(result), "sources": sources}
+    msg = await llm.ainvoke(prompts.get("answer_agent").format_messages(question=state["question"], context=context))
+    return {"answer": text_of(msg)}
+
+
+# ---------- 5. 근거 확인 (안전장치) ----------
+async def guard_node(state: AgentState) -> dict:
+    return {"result": finalize(state["answer"], state["documents"], state.get("removed", []),
+                               state.get("guard_on", True))}
 
 
 # ---------- 라우팅 ----------
@@ -144,47 +91,74 @@ def route_after_grading(state: AgentState) -> str:
 
 
 def build_agent_graph(llm=None):
-    # llm을 넘기지 않으면 기존처럼 로컬 Ollama 모델을 사용한다.
-    if llm is None:
-        llm = _default_llm()
-
+    llm = llm or _default_llm()
     graph = StateGraph(AgentState)
-
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("grade_documents", partial(grade_documents_node, llm=llm))
     graph.add_node("rewrite_query", partial(rewrite_query_node, llm=llm))
     graph.add_node("generate", partial(generate_node, llm=llm))
+    graph.add_node("guard", guard_node)
 
     graph.add_edge(START, "retrieve")
     graph.add_edge("retrieve", "grade_documents")
-    graph.add_conditional_edges(
-        "grade_documents",
-        route_after_grading,
-        {"generate": "generate", "rewrite_query": "rewrite_query"},
-    )
+    graph.add_conditional_edges("grade_documents", route_after_grading,
+                                {"generate": "generate", "rewrite_query": "rewrite_query"})
     graph.add_edge("rewrite_query", "retrieve")
-    graph.add_edge("generate", END)
-
+    graph.add_edge("generate", "guard")
+    graph.add_edge("guard", END)
     return graph.compile()
 
 
-def ask_agent(question: str, filename: Optional[str] = None, llm=None) -> dict:
-    app = build_agent_graph(llm=llm)
-    initial_state: AgentState = {
-        "question": question,
-        "search_query": question,
-        "filename": filename,
-        "documents": [],
-        "grade": "",
-        "retries": 0,
-        "answer": "",
-        "sources": [],
-    }
-    result = app.invoke(initial_state)
-    return {
-        "answer": result["answer"],
-        "sources": result["sources"],
-        "retries": result["retries"],
-        # 평가 시 '검색 실패'와 '생성 실패'를 구분하기 위해 마지막으로 검색된 문단 원문도 함께 반환
-        "contexts": [d.page_content for d in result["documents"]],
-    }
+def _initial(question: str, filename: Optional[str], guard_on: bool) -> AgentState:
+    return {"question": question, "search_query": question, "filename": filename, "documents": [],
+            "removed": [], "grade": "", "retries": 0, "answer": "", "result": {}, "guard_on": guard_on}
+
+
+def _response(state: dict, elapsed: float) -> dict:
+    out = dict(state["result"])
+    out["retries"] = state["retries"]
+    out["prompt_versions"] = prompts.versions(*PROMPTS)
+    out["elapsed_sec"] = round(elapsed, 2)
+    return out
+
+
+async def aask_agent(question: str, filename: Optional[str] = None, llm=None, guard_on: bool = True) -> dict:
+    t0 = time.perf_counter()
+    state = await build_agent_graph(llm).ainvoke(_initial(question, filename, guard_on))
+    return _response(state, time.perf_counter() - t0)
+
+
+def ask_agent(question: str, filename: Optional[str] = None, llm=None, guard_on: bool = True) -> dict:
+    """동기 버전 (평가 스크립트용)"""
+    return run_sync(aask_agent(question, filename, llm=llm, guard_on=guard_on))
+
+
+def _step_info(node: str, update: dict) -> dict:
+    """화면에 보여줄 단계별 요약"""
+    if node == "retrieve":
+        return {"chunks": len(update.get("documents", [])), "removed_injections": len(update.get("removed", []))}
+    if node == "grade_documents":
+        return {"grade": update.get("grade")}
+    if node == "rewrite_query":
+        return {"query": update.get("search_query"), "retry": update.get("retries")}
+    if node == "guard":
+        g = update["result"]["guard"]
+        return {"level": g["level"], "issues": g["issues"]}
+    return {}
+
+
+async def astream_agent(question: str, filename: Optional[str] = None, llm=None,
+                        guard_on: bool = True) -> AsyncIterator[dict]:
+    """단계가 끝날 때마다 {"type": "step", ...}을, 마지막에 {"type": "final", ...}을 흘려보낸다.
+
+    답변 글자를 한 글자씩 흘려보내지 않는 이유: 근거 확인(guard)을 통과하기 전의 답변을
+    사용자에게 먼저 보여주지 않기 위해서다. 대신 어느 단계에 있는지는 실시간으로 보여준다.
+    """
+    t0 = time.perf_counter()
+    state = _initial(question, filename, guard_on)
+    async for chunk in build_agent_graph(llm).astream(state, stream_mode="updates"):
+        for node, update in chunk.items():
+            state.update(update)
+            yield {"type": "step", "node": node, "elapsed_sec": round(time.perf_counter() - t0, 2),
+                   **_step_info(node, update)}
+    yield {"type": "final", **_response(state, time.perf_counter() - t0)}

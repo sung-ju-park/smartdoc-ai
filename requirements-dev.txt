@@ -1,0 +1,3 @@
+# 테스트용 (LLM·Ollama 없이 실행)
+pytest
+httpx

@@ -24,6 +24,7 @@ from datetime import datetime
 
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from backend import prompts
 from backend.agent_graph import ask_agent
 from backend.ingest import ingest_pdf
 from backend.rag_chain import ask as rag_ask
@@ -39,7 +40,7 @@ def load_dataset(path: str) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
-def run_one(item: dict, mode: str, llm, filename: str) -> dict:
+def run_one(item: dict, mode: str, llm, filename: str, guard_on: bool = True) -> dict:
     """질문 하나를 실행하고 답변, 시간, 토큰 사용량을 돌려준다.
 
     API 무료 등급 한도를 지키려고 기다린 시간(wait_sec)은 응답 시간에서 뺀다.
@@ -49,10 +50,10 @@ def run_one(item: dict, mode: str, llm, filename: str) -> dict:
     with get_usage_metadata_callback() as cb:
         start = time.perf_counter()
         if mode == "rag":
-            result = rag_ask(item["question"], filename, llm=llm)
+            result = rag_ask(item["question"], filename, llm=llm, guard_on=guard_on)
             retries = 0
         else:
-            result = ask_agent(item["question"], filename, llm=llm)
+            result = ask_agent(item["question"], filename, llm=llm, guard_on=guard_on)
             retries = result.get("retries", 0)
         elapsed = time.perf_counter() - start
     wait = getattr(limiter, "waited_sec", 0.0) - waited_before
@@ -61,8 +62,13 @@ def run_one(item: dict, mode: str, llm, filename: str) -> dict:
     input_tokens = sum(u.get("input_tokens", 0) for u in cb.usage_metadata.values())
     output_tokens = sum(u.get("output_tokens", 0) for u in cb.usage_metadata.values())
 
+    guard = result.get("guard", {})
     return {
         "answer": result["answer"],
+        "raw_answer": result.get("raw_answer", result["answer"]),
+        "guard_level": guard.get("level", ""),
+        "guard_issues": " | ".join(guard.get("issues", []) + guard.get("warnings", [])),
+        "removed_injections": len(guard.get("removed_injections", [])),
         "contexts": result.get("contexts", []),
         "retries": retries,
         "latency_sec": latency,
@@ -107,6 +113,10 @@ def summarize(rows: list[dict], model: str, mode: str) -> dict:
         "false_refusal": sum(r["failure_type"] == "false_refusal" for r in ans),
         "hallucination": sum(r["failure_type"] == "hallucination" for r in unans),
         "foreign_script": sum(r["foreign_script"] for r in ok),
+        # 안전장치: 막은 답변 수, 그중 원래는 정답이던 답변(잘못 막음), 경고 수
+        "blocked": sum(r.get("guard_level") == "blocked" for r in ok),
+        "blocked_but_correct": sum(r.get("guard_level") == "blocked" and r.get("raw_correct") for r in ok),
+        "warned": sum(r.get("guard_level") == "warn" for r in ok),
         "latency_mean": statistics.mean(lat) if lat else 0,
         "latency_median": statistics.median(lat) if lat else 0,
         "latency_p90": percentile(lat, 0.9),
@@ -116,10 +126,11 @@ def summarize(rows: list[dict], model: str, mode: str) -> dict:
     }
 
 
-def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None:
+def write_reports(out_dir: str, rows: list[dict], summaries: list[dict], meta: str = "") -> None:
     fields = [
         "model", "mode", "id", "answerable", "question", "answer", "correct", "partial",
         "refused", "retrieval_hit", "failure_type", "foreign_script", "retries",
+        "guard_level", "guard_issues", "raw_correct", "raw_answer",
         "latency_sec", "wait_sec", "input_tokens", "output_tokens", "error",
     ]
     with open(os.path.join(out_dir, "results.csv"), "w", newline="", encoding="utf-8-sig") as f:
@@ -129,8 +140,10 @@ def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None
 
     lines = [
         "# LLM 비교 실험 결과\n",
-        "| 모델 | 방식 | 오류 | 정답률 | 부분점수 | 거절 정확도 | 검색 실패 | 생성 실패 | 잘못된 거절 | 환각 | 외국 문자 혼입 | 평균 응답(초) | p90 응답(초) | 평균 토큰(입력/출력) | 100문항당 비용(USD) |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        meta,
+        "",
+        "| 모델 | 방식 | 오류 | 정답률 | 부분점수 | 거절 정확도 | 검색 실패 | 생성 실패 | 잘못된 거절 | 환각 | 외국 문자 혼입 | 안전장치 차단 (그중 원래 정답) | 경고 | 평균 응답(초) | p90 응답(초) | 평균 토큰(입력/출력) | 100문항당 비용(USD) |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for s in summaries:
         cost = "-" if s["cost_per_100"] is None else f"{s['cost_per_100']:.4f}"
@@ -138,6 +151,7 @@ def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None
             f"| {s['model']} | {s['mode']} | {s['errors']} | {s['accuracy']:.0%} | {s['partial']:.2f} | "
             f"{s['refusal_acc']:.0%} | {s['retrieval_miss']} | {s['generation_miss']} | "
             f"{s['false_refusal']} | {s['hallucination']} | {s['foreign_script']} | "
+            f"{s['blocked']} ({s['blocked_but_correct']}) | {s['warned']} | "
             f"{s['latency_mean']:.1f} | {s['latency_p90']:.1f} | "
             f"{s['avg_input_tokens']:.0f} / {s['avg_output_tokens']:.0f} | {cost} |"
         )
@@ -147,6 +161,8 @@ def write_reports(out_dir: str, rows: list[dict], summaries: list[dict]) -> None
         "- 거절 정확도: 문서에 없는 질문에 모른다고 답한 비율 (못 하면 '환각'으로 집계)",
         "- 검색 실패: 정답 근거가 검색된 문단에 없었던 경우 / 생성 실패: 근거는 있었는데 답이 틀린 경우",
         "- 비용은 models.py의 PRICE_PER_1M_TOKENS를 채웠을 때만 계산",
+        "- 안전장치 차단: 근거 확인에 걸려 답변 대신 안내 문장을 보낸 수. 괄호는 원래 답변이 정답이었던 경우(잘못 막음)",
+        "- 정답률은 사용자에게 실제로 보인 답변 기준 (막힌 답변은 오답으로 집계)",
     ]
     with open(os.path.join(out_dir, "summary.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -174,6 +190,7 @@ def main():
     parser.add_argument("--dataset", default=os.path.join(HERE, "dataset.jsonl"))
     parser.add_argument("--limit", type=int, default=0, help="빠른 테스트용: 앞에서부터 N개만 실행")
     parser.add_argument("--skip-ingest", action="store_true", help="이미 인덱싱된 문서면 다시 넣지 않음")
+    parser.add_argument("--no-guard", action="store_true", help="안전장치를 끄고 실행 (비교용)")
     args = parser.parse_args()
 
     filename = os.path.basename(args.doc)
@@ -205,9 +222,10 @@ def main():
                     "answerable": item["answerable"], "question": item["question"], "error": "",
                 }
                 try:
-                    out = run_one(item, mode, llm, filename)
+                    out = run_one(item, mode, llm, filename, guard_on=not args.no_guard)
                     row.update(out)
                     row.update(score(item, out["answer"], out["contexts"]))
+                    row["raw_correct"] = score(item, out["raw_answer"], out["contexts"])["correct"]
                 except Exception as e:
                     row.update({
                         "answer": "", "correct": False, "partial": 0.0, "refused": False,
@@ -222,7 +240,10 @@ def main():
             rows += mode_rows
             summaries.append(summarize(mode_rows, model, mode))
 
-    write_reports(out_dir, rows, summaries)
+    meta = (f"- 프롬프트 버전: {prompts.versions()}\n"
+            f"- 안전장치: {'끔' if args.no_guard else '켬'}\n"
+            f"- 실행: {datetime.now():%Y-%m-%d %H:%M}")
+    write_reports(out_dir, rows, summaries, meta)
     with open(os.path.join(out_dir, "summary.md"), encoding="utf-8") as f:
         print("\n" + f.read())
     print(f"결과 저장 위치: {out_dir}")

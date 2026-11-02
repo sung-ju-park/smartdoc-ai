@@ -43,12 +43,18 @@ def main():
             "latency_sec": float(r["latency_sec"] or 0),
             "input_tokens": int(r["input_tokens"] or 0),
             "output_tokens": int(r["output_tokens"] or 0),
+            # 안전장치를 넣은 뒤의 결과 파일에만 있는 칸 (없으면 빈 값)
+            "guard_level": r.get("guard_level", ""), "guard_issues": r.get("guard_issues", ""),
+            "raw_answer": r.get("raw_answer", ""), "wait_sec": float(r.get("wait_sec") or 0),
         }
         if row["error"]:
             row.update({"correct": False, "partial": 0.0, "refused": False,
                         "retrieval_hit": None, "failure_type": "", "foreign_script": False})
         else:
             row.update(score(items[r["id"]], r["answer"], None, to_bool(r["retrieval_hit"])))
+            if row["raw_answer"]:
+                row["raw_correct"] = score(items[r["id"]], row["raw_answer"], None,
+                                           to_bool(r["retrieval_hit"]))["correct"]
         rows.append(row)
 
     summaries = []
@@ -58,7 +64,14 @@ def main():
 
     out_dir = os.path.normpath(args.result_dir) + "_rescored"
     os.makedirs(out_dir, exist_ok=True)
-    write_reports(out_dir, rows, summaries)
+    meta = ""
+    md = os.path.join(args.result_dir, "summary.md")
+    if os.path.exists(md):   # 원본의 프롬프트 버전·안전장치 설정 줄을 그대로 옮긴다
+        with open(md, encoding="utf-8") as f:
+            meta = "".join(l for l in f if l.startswith("- 프롬프트") or l.startswith("- 안전장치:")
+                           or l.startswith("- 실행"))
+        meta += "- 다시 채점: 채점 규칙(scoring.py) 수정 후 저장된 답변으로 재계산"
+    write_reports(out_dir, rows, summaries, meta)
     with open(os.path.join(out_dir, "summary.md"), encoding="utf-8") as f:
         print(f.read())
     print(f"다시 채점한 결과 저장 위치: {out_dir}")

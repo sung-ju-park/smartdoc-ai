@@ -5,27 +5,38 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from mcp.server.fastmcp import FastMCP
-from backend.rag_chain import ask as rag_ask
-from backend.agent_graph import ask_agent
+from backend.rag_chain import aask
+from backend.agent_graph import aask_agent
+from backend.guardrails import sanitize_filename
 from backend.ingest import ingest_pdf
 
 mcp = FastMCP("SmartDoc AI")
 
 
+def _guard_note(result: dict) -> str:
+    g = result.get("guard", {})
+    notes = []
+    if g.get("level") == "blocked":
+        notes.append("근거 확인 실패로 답변을 내보내지 않음: " + "; ".join(g.get("issues", [])))
+    if g.get("removed_injections"):
+        notes.append(f"문서 속 지시문 {len(g['removed_injections'])}개를 걸러냄")
+    return ("\n[안전장치: " + " / ".join(notes) + "]") if notes else ""
+
+
 @mcp.tool()
-def search_documents(question: str, filename: str | None = None) -> str:
+async def search_documents(question: str, filename: str | None = None) -> str:
     """업로드된 문서에서 질문과 관련된 내용을 검색하고 답변합니다 (기본 RAG)."""
-    result = rag_ask(question, filename)
+    result = await aask(question, filename)
     sources = ", ".join(result["sources"]) if result["sources"] else "없음"
-    return f"{result['answer']}\n\n[출처: {sources}]"
+    return f"{result['answer']}\n\n[출처: {sources}]{_guard_note(result)}"
 
 
 @mcp.tool()
-def ask_document_agent(question: str, filename: str | None = None) -> str:
+async def ask_document_agent(question: str, filename: str | None = None) -> str:
     """자기교정형 RAG Agent로 문서 기반 질문에 답변합니다. 검색 결과가 부족하면 스스로 질의를 재구성해 다시 검색합니다."""
-    result = ask_agent(question, filename)
+    result = await aask_agent(question, filename)
     sources = ", ".join(result["sources"]) if result["sources"] else "없음"
-    return f"{result['answer']}\n\n[출처: {sources}, 재시도 횟수: {result['retries']}]"
+    return f"{result['answer']}\n\n[출처: {sources}, 재시도 횟수: {result['retries']}]{_guard_note(result)}"
 
 
 @mcp.tool()
@@ -35,7 +46,7 @@ def upload_document(file_path: str) -> str:
         return f"파일을 찾을 수 없습니다: {file_path}"
     if not file_path.lower().endswith(".pdf"):
         return "PDF 파일만 업로드할 수 있습니다."
-    filename = os.path.basename(file_path)
+    filename = sanitize_filename(file_path)
     try:
         chunk_count = ingest_pdf(file_path, filename)
         return f"'{filename}' 인덱싱 완료 — {chunk_count}개 청크로 저장됐습니다."
